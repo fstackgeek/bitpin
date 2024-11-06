@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Posts</title>
+    </head>
+
+    <body>
+        <p class="logout-container">
+            <span id="logout">Logout</span>
+        </p>
+        <h1>Posts</h1>
+        <button class="pagination-button previousPage">Previous page</button>
+        <button class="pagination-button nextPage">Next page</button>
+        <div id="postsList"></div>
+        <button class="pagination-button previousPage">Previous page</button>
+        <button class="pagination-button nextPage">Next page</button>
+
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+        <script>
+            const token = localStorage.getItem('access_token')
+            if (!token) {
+                window.location = '/login/'
+            }
+
+            document.getElementById('logout').onclick = () => {
+                localStorage.removeItem('access_token')
+                window.location = '/login/'
+            }
+
+            const fetchPosts = async (cursor) => {
+                try {
+                    const response = await axios.get(`/api/posts/${cursor ? cursor : ''}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    })
+                    displayPosts(response.data)
+                } catch (error) {
+                    if (error.status === 401) {
+                        window.location = '/login/'
+                    } else {
+                        console.error(error)
+                        alert('Failed to fetch posts')
+                    }
+                }
+            }
+
+            const displayPosts = (data) => {
+                const { posts, previous_cursor, next_cursor } = data
+                const postsList = document.getElementById('postsList')
+                postsList.innerHTML = ''
+                posts.forEach((post) => {
+                    const postElement = document.createElement('div')
+                    postElement.innerHTML = `
+            <h3>${post.title}</h3>
+            <p>${post.content}</p>
+            <p>Average Rating: <span class="value">${(post.rating_average || 0).toPrecision(
+                2
+            )}</span> (Rated by <span class="value">${post.rating_count}</span> users)</p>
+            ${post.user_rating != undefined ? `<p>You Rated: ${post.user_rating}</p>` : ''}
+            <div id="stars-${post.id}">
+                ${[0, 1, 2, 3, 4, 5]
+                    .map((i) => {
+                        const isSelected = i <= post.user_rating
+                        const star = isSelected && i > 0 ? '★' : '☆'
+                        const color = i === 0 ? 'red' : 'gold'
+                        const style = isSelected ? `color: ${color}` : ''
+                        return `<span class="star" title="${i}" data-rating="${i}" data-post="${post.id}" style="${style}">${star}</span>`
+                    })
+                    .join('')}
+            </div>
+            <hr>
+        `
+                    postsList.appendChild(postElement)
+                })
+
+                document.querySelectorAll('.previousPage').forEach((node) => {
+                    const cursor = previous_cursor ? new URL(previous_cursor).search : null
+                    if (!cursor) {
+                        node.setAttribute('disabled', true)
+                    } else {
+                        node.removeAttribute('disabled')
+                    }
+                    node.onclick = fetchPosts.bind(null, cursor)
+                })
+                document.querySelectorAll('.nextPage').forEach((node) => {
+                    const cursor = next_cursor ? new URL(next_cursor).search : null
+                    if (!cursor) {
+                        node.setAttribute('disabled', true)
+                    } else {
+                        node.removeAttribute('disabled')
+                    }
+                    node.onclick = fetchPosts.bind(null, cursor)
+                })
+
+                document.querySelectorAll('span[data-rating]').forEach((star) => {
+                    star.onclick = handleRating
+                })
+            }
+
+            const handleRating = async (e) => {
+                const value = e.target.getAttribute('data-rating')
+                const postId = e.target.getAttribute('data-post')
+
+                try {
+                    await axios.post(
+                        `/api/posts/${postId}/rate/`,
+                        { value },
+                        {
+                            headers: { Authorization: `Bearer ${token}` }
+                        }
+                    )
+                    fetchPosts()
+                } catch (error) {
+                    console.error(error)
+                    alert('Failed to submit rating')
+                }
+            }
+
+            fetchPosts()
+        </script>
+    </body>
+    <style>
+        * {
+            font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+        }
+        .value {
+            font-weight: bold;
+        }
+        .star {
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .pagination-button {
+            padding: 5px 10px;
+        }
+        .logout-container {
+            text-align: right;
+        }
+        #logout {
+            color: red;
+            border: 1px solid red;
+            border-radius: 5px;
+            padding: 5px;
+            cursor: pointer;
+        }
+    </style>
+</html>
